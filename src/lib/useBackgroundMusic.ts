@@ -1,111 +1,87 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import menuTrack from "../assets/audio/menu.mp3";
-import lightTrack from "../assets/audio/light.mp3";
-import nightTrack from "../assets/audio/night.mp3";
-
-export type MusicTrack = "menu" | "light" | "night";
-
-const TRACK_SRC: Record<MusicTrack, string> = {
-  menu: menuTrack,
-  light: lightTrack,
-  night: nightTrack,
-};
-
-/** Which ambient track should be playing for the current screen/scene. */
-export function trackForScene(
-  screen: "menu" | "playing",
-  sceneId: string,
-): MusicTrack {
-  if (screen === "menu") return "menu";
-  if (sceneId.includes("night")) return "night";
-  if (sceneId.includes("light")) return "light";
-  return "menu";
-}
+import { GenerativeMusicEngine } from "./generativeMusic";
 
 const VOLUME = 0.45;
-const FADE_MS = 700;
+const FADE_SEC = 1.2;
 const MUTE_KEY = "foxbound-music-muted";
 
-export function useBackgroundMusic(track: MusicTrack) {
+/**
+ * Drives the title-screen ambient music. `active` should be true only while
+ * the menu is on screen — the engine fades out and stops everywhere else.
+ */
+export function useBackgroundMusic(active: boolean) {
   const [muted, setMuted] = useState(
     () => localStorage.getItem(MUTE_KEY) === "true",
   );
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const currentTrackRef = useRef<MusicTrack | null>(null);
-  const startedRef = useRef(false);
-  const fadeIntervalRef = useRef<number | undefined>(undefined);
+  const ctxRef = useRef<AudioContext | null>(null);
+  const engineRef = useRef<GenerativeMusicEngine | null>(null);
+  const unlockedRef = useRef(false);
 
-  if (!audioRef.current) {
-    const audio = new Audio();
-    audio.loop = true;
-    audio.volume = 0;
-    audioRef.current = audio;
-  }
-
-  const fadeTo = useCallback((target: number, onDone?: () => void) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    window.clearInterval(fadeIntervalRef.current);
-    const steps = 16;
-    const from = audio.volume;
-    let i = 0;
-    fadeIntervalRef.current = window.setInterval(() => {
-      i += 1;
-      audio.volume = Math.max(0, Math.min(1, from + (target - from) * (i / steps)));
-      if (i >= steps) {
-        window.clearInterval(fadeIntervalRef.current);
-        onDone?.();
-      }
-    }, FADE_MS / steps);
+  const ensureEngine = useCallback(() => {
+    if (engineRef.current && ctxRef.current) return engineRef.current;
+    const ctx = new AudioContext();
+    const engine = new GenerativeMusicEngine(ctx, ctx.destination);
+    ctxRef.current = ctx;
+    engineRef.current = engine;
+    return engine;
   }, []);
 
-  const playTrack = useCallback(
-    (next: MusicTrack, targetVolume: number) => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      currentTrackRef.current = next;
-      const swap = () => {
-        audio.src = TRACK_SRC[next];
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-        fadeTo(targetVolume);
-      };
-      if (audio.volume > 0) {
-        fadeTo(0, swap);
-      } else {
-        swap();
-      }
-    },
-    [fadeTo],
-  );
+  const syncEngine = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || !unlockedRef.current) return;
+    if (active) {
+      ctxRef.current?.resume().catch(() => {});
+      engine.start();
+      engine.setVolume(muted ? 0 : VOLUME, FADE_SEC);
+    } else {
+      engine.setVolume(0, FADE_SEC);
+      window.setTimeout(() => {
+        if (!active) engine.stop();
+      }, FADE_SEC * 1000 + 100);
+    }
+  }, [active, muted]);
 
-  const start = useCallback(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    playTrack(track, muted ? 0 : VOLUME);
-  }, [playTrack, track, muted]);
+  /** Call from a user-gesture handler (e.g. a click) to unlock audio. */
+  const unlock = useCallback(() => {
+    if (unlockedRef.current) return;
+    unlockedRef.current = true;
+    ensureEngine();
+    ctxRef.current?.resume().catch(() => {});
+    syncEngine();
+  }, [ensureEngine, syncEngine]);
 
   useEffect(() => {
-    if (!startedRef.current) return;
-    if (currentTrackRef.current === track) return;
-    playTrack(track, muted ? 0 : VOLUME);
-  }, [track, muted, playTrack]);
+    syncEngine();
+  }, [syncEngine]);
 
   useEffect(() => {
     localStorage.setItem(MUTE_KEY, String(muted));
-    if (!startedRef.current) return;
-    fadeTo(muted ? 0 : VOLUME);
-  }, [muted, fadeTo]);
+  }, [muted]);
 
   useEffect(() => {
-    const audio = audioRef.current;
+    const handleVisibilityChange = () => {
+      const ctx = ctxRef.current;
+      if (!ctx || !unlockedRef.current) return;
+      if (document.hidden) {
+        ctx.suspend().catch(() => {});
+      } else if (!muted && active) {
+        ctx.resume().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      window.clearInterval(fadeIntervalRef.current);
-      audio?.pause();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [muted, active]);
+
+  useEffect(() => {
+    return () => {
+      engineRef.current?.stop();
+      ctxRef.current?.close().catch(() => {});
     };
   }, []);
 
   const toggleMuted = useCallback(() => setMuted((m) => !m), []);
 
-  return { muted, toggleMuted, start };
+  return { muted, toggleMuted, unlock };
 }

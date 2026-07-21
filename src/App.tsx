@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MainMenu } from "./components/MainMenu";
 import { MusicToggle } from "./components/MusicToggle";
 import { StoryScreen } from "./components/StoryScreen";
-import { trackForScene, useBackgroundMusic } from "./lib/useBackgroundMusic";
+import { useBackgroundMusic } from "./lib/useBackgroundMusic";
 import { twoCastles, START_SCENE_ID } from "./story/twoCastles";
 import { hasSave, useStoryEngine } from "./story/useStoryEngine";
 import "./App.css";
@@ -15,38 +15,39 @@ function App() {
     twoCastles,
     START_SCENE_ID,
   );
-  const music = useBackgroundMusic(trackForScene(screen, scene.id));
+  const music = useBackgroundMusic(screen === "menu");
 
   return (
     <div id="root-container">
-      <MusicToggle
-        muted={music.muted}
-        onToggle={() => {
-          music.start();
-          music.toggleMuted();
-        }}
-      />
       {screen === "menu" ? (
-        <MainMenu
-          title={TITLE}
-          canContinue={hasSave()}
-          onNewGame={() => {
-            music.start();
-            restart();
-            setScreen("playing");
-          }}
-          onContinue={() => {
-            music.start();
-            resume();
-            setScreen("playing");
-          }}
-        />
+        <>
+          <MusicToggle
+            muted={music.muted}
+            onToggle={() => {
+              music.unlock();
+              music.toggleMuted();
+            }}
+          />
+          <MainMenu
+            title={TITLE}
+            canContinue={hasSave()}
+            onNewGame={() => {
+              restart();
+              setScreen("playing");
+            }}
+            onContinue={() => {
+              resume();
+              setScreen("playing");
+            }}
+          />
+        </>
       ) : (
         <StoryScreen
           scene={scene}
           flags={flags}
           onChoose={choose}
           onRestart={() => {
+            music.unlock();
             restart();
             setScreen("menu");
           }}
