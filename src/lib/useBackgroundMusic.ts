@@ -1,30 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GenerativeMusicEngine, type Mood } from "./generativeMusic";
-
-export type MusicTrack = Mood;
-
-/** Which ambient mood should be playing for the current screen/scene. */
-export function trackForScene(
-  screen: "menu" | "playing",
-  sceneId: string,
-): MusicTrack {
-  if (screen === "menu") return "menu";
-  if (sceneId.includes("night")) return "night";
-  if (sceneId.includes("light")) return "light";
-  return "menu";
-}
+import { GenerativeMusicEngine } from "./generativeMusic";
 
 const VOLUME = 0.45;
 const FADE_SEC = 1.2;
 const MUTE_KEY = "foxbound-music-muted";
 
-export function useBackgroundMusic(track: MusicTrack) {
+/**
+ * Drives the title-screen ambient music. `active` should be true only while
+ * the menu is on screen — the engine fades out and stops everywhere else.
+ */
+export function useBackgroundMusic(active: boolean) {
   const [muted, setMuted] = useState(
     () => localStorage.getItem(MUTE_KEY) === "true",
   );
   const ctxRef = useRef<AudioContext | null>(null);
   const engineRef = useRef<GenerativeMusicEngine | null>(null);
-  const startedRef = useRef(false);
+  const unlockedRef = useRef(false);
 
   const ensureEngine = useCallback(() => {
     if (engineRef.current && ctxRef.current) return engineRef.current;
@@ -35,34 +26,45 @@ export function useBackgroundMusic(track: MusicTrack) {
     return engine;
   }, []);
 
-  const start = useCallback(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    const engine = ensureEngine();
+  const syncEngine = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || !unlockedRef.current) return;
+    if (active) {
+      ctxRef.current?.resume().catch(() => {});
+      engine.start();
+      engine.setVolume(muted ? 0 : VOLUME, FADE_SEC);
+    } else {
+      engine.setVolume(0, FADE_SEC);
+      window.setTimeout(() => {
+        if (!active) engine.stop();
+      }, FADE_SEC * 1000 + 100);
+    }
+  }, [active, muted]);
+
+  /** Call from a user-gesture handler (e.g. a click) to unlock audio. */
+  const unlock = useCallback(() => {
+    if (unlockedRef.current) return;
+    unlockedRef.current = true;
+    ensureEngine();
     ctxRef.current?.resume().catch(() => {});
-    engine.setMood(track);
-    engine.start();
-    engine.setVolume(muted ? 0 : VOLUME, FADE_SEC);
-  }, [ensureEngine, track, muted]);
+    syncEngine();
+  }, [ensureEngine, syncEngine]);
 
   useEffect(() => {
-    if (!startedRef.current) return;
-    engineRef.current?.setMood(track);
-  }, [track]);
+    syncEngine();
+  }, [syncEngine]);
 
   useEffect(() => {
     localStorage.setItem(MUTE_KEY, String(muted));
-    if (!startedRef.current) return;
-    engineRef.current?.setVolume(muted ? 0 : VOLUME, FADE_SEC);
   }, [muted]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       const ctx = ctxRef.current;
-      if (!ctx || !startedRef.current) return;
+      if (!ctx || !unlockedRef.current) return;
       if (document.hidden) {
         ctx.suspend().catch(() => {});
-      } else if (!muted) {
+      } else if (!muted && active) {
         ctx.resume().catch(() => {});
       }
     };
@@ -70,7 +72,7 @@ export function useBackgroundMusic(track: MusicTrack) {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [muted]);
+  }, [muted, active]);
 
   useEffect(() => {
     return () => {
@@ -81,5 +83,5 @@ export function useBackgroundMusic(track: MusicTrack) {
 
   const toggleMuted = useCallback(() => setMuted((m) => !m), []);
 
-  return { muted, toggleMuted, start };
+  return { muted, toggleMuted, unlock };
 }
