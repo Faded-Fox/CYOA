@@ -81,7 +81,18 @@ export function useBackgroundMusic(active: boolean) {
     };
   }, []);
 
-  const toggleMuted = useCallback(() => setMuted((m) => !m), []);
+  /**
+   * For the mute button: the first tap just unlocks audio (so you actually
+   * hear the current mute preference play out) instead of also toggling
+   * mute and immediately silencing what was about to start.
+   */
+  const toggleMuted = useCallback(() => {
+    if (!unlockedRef.current) {
+      unlock();
+      return;
+    }
+    setMuted((m) => !m);
+  }, [unlock]);
 
   return { muted, toggleMuted, unlock };
 }
