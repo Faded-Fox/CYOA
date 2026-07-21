@@ -5,6 +5,31 @@
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
+  position: relative;
+}
+
+.music-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.music-toggle:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
 .main-menu,
