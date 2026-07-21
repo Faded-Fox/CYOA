@@ -98,6 +98,22 @@ export function useBackgroundMusic(track: MusicTrack) {
   }, [muted, fadeTo]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      const audio = audioRef.current;
+      if (!audio || !startedRef.current) return;
+      if (document.hidden) {
+        audio.pause();
+      } else if (!muted) {
+        audio.play().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [muted]);
+
+  useEffect(() => {
     const audio = audioRef.current;
     return () => {
       window.clearInterval(fadeIntervalRef.current);
