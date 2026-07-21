@@ -5,7 +5,7 @@ import { twoCastles, START_SCENE_ID } from "./story/twoCastles";
 import { hasSave, useStoryEngine } from "./story/useStoryEngine";
 import "./App.css";
 
-const TITLE = "The Fox and the Two Castles";
+const TITLE = "Foxbound";
 
 function App() {
   const [screen, setScreen] = useState<"menu" | "playing">("menu");
