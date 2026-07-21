@@ -15,14 +15,24 @@ export function useBackgroundMusic(active: boolean) {
   );
   const ctxRef = useRef<AudioContext | null>(null);
   const engineRef = useRef<GenerativeMusicEngine | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
   const unlockedRef = useRef(false);
 
+  // Route the synthesized audio through a real <audio> element instead of
+  // straight to ctx.destination. iOS silences raw Web Audio API output when
+  // the phone's ring/silent switch is on, but exempts <audio>/<video>
+  // playback from that restriction, so this is what actually makes the
+  // generative music audible on iPhone.
   const ensureEngine = useCallback(() => {
     if (engineRef.current && ctxRef.current) return engineRef.current;
     const ctx = new AudioContext();
-    const engine = new GenerativeMusicEngine(ctx, ctx.destination);
+    const streamDest = ctx.createMediaStreamDestination();
+    const engine = new GenerativeMusicEngine(ctx, streamDest);
+    const audioEl = new Audio();
+    audioEl.srcObject = streamDest.stream;
     ctxRef.current = ctx;
     engineRef.current = engine;
+    audioElRef.current = audioEl;
     return engine;
   }, []);
 
@@ -47,6 +57,7 @@ export function useBackgroundMusic(active: boolean) {
     unlockedRef.current = true;
     ensureEngine();
     ctxRef.current?.resume().catch(() => {});
+    audioElRef.current?.play().catch(() => {});
     syncEngine();
   }, [ensureEngine, syncEngine]);
 
@@ -77,6 +88,7 @@ export function useBackgroundMusic(active: boolean) {
   useEffect(() => {
     return () => {
       engineRef.current?.stop();
+      audioElRef.current?.pause();
       ctxRef.current?.close().catch(() => {});
     };
   }, []);
