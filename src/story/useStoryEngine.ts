@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Flags, Story } from "./types";
 
-const SAVE_KEY = "cyoa-save-v1";
+const SAVE_KEY_PREFIX = "cyoa-save-v1:";
 
 interface SaveData {
   sceneId: string;
@@ -9,8 +9,8 @@ interface SaveData {
   history: string[];
 }
 
-function loadSave(): SaveData | null {
-  const raw = localStorage.getItem(SAVE_KEY);
+function loadSave(storyId: string): SaveData | null {
+  const raw = localStorage.getItem(SAVE_KEY_PREFIX + storyId);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as SaveData;
@@ -19,36 +19,38 @@ function loadSave(): SaveData | null {
   }
 }
 
-export function hasSave(): boolean {
-  return loadSave() !== null;
+export function hasSave(storyId: string): boolean {
+  return loadSave(storyId) !== null;
 }
 
-export function useStoryEngine(story: Story, startSceneId: string) {
-  const [sceneId, setSceneId] = useState(startSceneId);
-  const [flags, setFlags] = useState<Flags>({});
-  const [history, setHistory] = useState<string[]>([startSceneId]);
+/**
+ * @param startResumed Seed state from this story's save on mount instead of
+ * starting fresh. Callers should remount (e.g. via a `key`) when switching
+ * which story is active, since this only applies once, at mount time.
+ */
+export function useStoryEngine(
+  story: Story,
+  startSceneId: string,
+  storyId: string,
+  startResumed: boolean,
+) {
+  const initial = startResumed ? loadSave(storyId) : null;
+  const [sceneId, setSceneId] = useState(initial?.sceneId ?? startSceneId);
+  const [flags, setFlags] = useState<Flags>(initial?.flags ?? {});
+  const [history, setHistory] = useState<string[]>(
+    initial?.history ?? [startSceneId],
+  );
 
   useEffect(() => {
     localStorage.setItem(
-      SAVE_KEY,
+      SAVE_KEY_PREFIX + storyId,
       JSON.stringify({ sceneId, flags, history } satisfies SaveData),
     );
-  }, [sceneId, flags, history]);
-
-  const resume = useCallback(() => {
-    const save = loadSave();
-    if (!save) return;
-    setSceneId(save.sceneId);
-    setFlags(save.flags);
-    setHistory(save.history);
-  }, []);
+  }, [storyId, sceneId, flags, history]);
 
   const restart = useCallback(() => {
-    localStorage.removeItem(SAVE_KEY);
-    setSceneId(startSceneId);
-    setFlags({});
-    setHistory([startSceneId]);
-  }, [startSceneId]);
+    localStorage.removeItem(SAVE_KEY_PREFIX + storyId);
+  }, [storyId]);
 
   const choose = useCallback((nextId: string, setFlagsOnChoice?: Flags) => {
     setFlags((prev) =>
@@ -60,5 +62,5 @@ export function useStoryEngine(story: Story, startSceneId: string) {
 
   const scene = story[sceneId];
 
-  return { scene, flags, history, choose, resume, restart };
+  return { scene, flags, history, choose, restart };
 }

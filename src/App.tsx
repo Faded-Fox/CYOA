@@ -1,51 +1,74 @@
 import { useState } from "react";
-import { MainMenu } from "./components/MainMenu";
 import { MusicToggle } from "./components/MusicToggle";
+import { StorySelect } from "./components/StorySelect";
 import { StoryScreen } from "./components/StoryScreen";
 import { useBackgroundMusic } from "./lib/useBackgroundMusic";
-import { twoCastles, START_SCENE_ID } from "./story/twoCastles";
-import { hasSave, useStoryEngine } from "./story/useStoryEngine";
+import { STORIES, type StoryDef } from "./story/stories";
+import { useStoryEngine } from "./story/useStoryEngine";
 import "./App.css";
 
 const TITLE = "Foxbound";
 
-function App() {
-  const [screen, setScreen] = useState<"menu" | "playing">("menu");
-  const { scene, flags, choose, resume, restart } = useStoryEngine(
-    twoCastles,
-    START_SCENE_ID,
+interface PlayingState {
+  storyId: string;
+  resume: boolean;
+}
+
+interface StoryPlayerProps {
+  storyDef: StoryDef;
+  resume: boolean;
+  onExit: () => void;
+}
+
+function StoryPlayer({ storyDef, resume, onExit }: StoryPlayerProps) {
+  const { scene, flags, choose, restart } = useStoryEngine(
+    storyDef.story,
+    storyDef.startSceneId,
+    storyDef.id,
+    resume,
   );
-  const music = useBackgroundMusic(screen === "menu");
+
+  return (
+    <StoryScreen
+      scene={scene}
+      flags={flags}
+      onChoose={choose}
+      onRestart={() => {
+        restart();
+        onExit();
+      }}
+    />
+  );
+}
+
+function App() {
+  const [playing, setPlaying] = useState<PlayingState | null>(null);
+  const music = useBackgroundMusic(playing === null);
+  const activeStory = playing
+    ? STORIES.find((s) => s.id === playing.storyId)
+    : undefined;
 
   return (
     <div id="root-container">
-      {screen === "menu" ? (
-        <>
-          <MusicToggle muted={music.muted} onToggle={music.toggleMuted} />
-          <MainMenu
-            title={TITLE}
-            canContinue={hasSave()}
-            onNewGame={() => {
-              restart();
-              setScreen("playing");
-            }}
-            onContinue={() => {
-              resume();
-              setScreen("playing");
-            }}
-          />
-        </>
-      ) : (
-        <StoryScreen
-          scene={scene}
-          flags={flags}
-          onChoose={choose}
-          onRestart={() => {
+      {playing && activeStory ? (
+        <StoryPlayer
+          storyDef={activeStory}
+          resume={playing.resume}
+          onExit={() => {
             music.unlock();
-            restart();
-            setScreen("menu");
+            setPlaying(null);
           }}
         />
+      ) : (
+        <>
+          <MusicToggle muted={music.muted} onToggle={music.toggleMuted} />
+          <StorySelect
+            title={TITLE}
+            stories={STORIES}
+            onNewGame={(storyId) => setPlaying({ storyId, resume: false })}
+            onContinue={(storyId) => setPlaying({ storyId, resume: true })}
+          />
+        </>
       )}
     </div>
   );
