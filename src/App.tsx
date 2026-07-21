@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { MainMenu } from "./components/MainMenu";
 import { StoryScreen } from "./components/StoryScreen";
-import { sunkenLighthouse, START_SCENE_ID } from "./story/sunkenLighthouse";
+import { twoCastles, START_SCENE_ID } from "./story/twoCastles";
 import { hasSave, useStoryEngine } from "./story/useStoryEngine";
 import "./App.css";
 
-const TITLE = "The Sunken Lighthouse";
+const TITLE = "The Fox and the Two Castles";
 
 function App() {
   const [screen, setScreen] = useState<"menu" | "playing">("menu");
   const { scene, flags, choose, resume, restart } = useStoryEngine(
-    sunkenLighthouse,
+    twoCastles,
     START_SCENE_ID,
   );
 

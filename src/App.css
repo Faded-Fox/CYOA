@@ -14,6 +14,13 @@
   text-align: center;
 }
 
+.hero-image {
+  width: 220px;
+  max-width: 60vw;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
 .story-text {
   text-align: left;
   font-size: 19px;
