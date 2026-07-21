@@ -21,13 +21,7 @@ function App() {
     <div id="root-container">
       {screen === "menu" ? (
         <>
-          <MusicToggle
-            muted={music.muted}
-            onToggle={() => {
-              music.unlock();
-              music.toggleMuted();
-            }}
-          />
+          <MusicToggle muted={music.muted} onToggle={music.toggleMuted} />
           <MainMenu
             title={TITLE}
             canContinue={hasSave()}
